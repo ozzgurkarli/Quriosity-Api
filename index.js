@@ -66,14 +66,74 @@ app.post("/login", async (req, res) => {
 
         res.status(200).json(doc.data());
     } catch (error) {
+        if (error.code == "auth/invalid-credential") {
+            return res.status(404).send("Password does not match.");
+        }
         console.error("Kullanıcı oluşturulurken hata:", error);
         res.status(500).send("Bir hata oluştu: " + error.message);
     }
 });
 
-app.get("/resetPassword", async (req, res) => {
-    const username = req.query.username;
-    const email = req.query.email;
+app.post("/createCommunity", async (req, res) => {
+    const { CommunityName, Participants } = req.body;
+    const now = new Date();
+
+    try {
+        await db.collection("communities").doc().set({
+            CommunityName: CommunityName,
+            Participants: Participants,
+            Streak: 0,
+            LastActivity: now.getTime()
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+
+app.get("/communities/:uid", async (req, res) => {
+    const { uid } = req.params;
+    const results = [];
+
+    try {
+        const communitiesRef = await db.collection("communities");
+
+        const querySnapshot1 = await communitiesRef
+            .where("Participants", "array-contains", { uid: uid, flag: 1 })
+            .get();
+        const querySnapshot2 = await communitiesRef
+            .where("Participants", "array-contains", { uid: uid, flag: 0 })
+            .get();
+
+        const results = [];
+
+        querySnapshot1.forEach(doc => {
+            results.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        querySnapshot2.forEach(doc => {
+            results.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+
+app.get("/resetPassword/:username/:email", async (req, res) => {
+    const { username, email } = req.params;
 
     try {
         const snapshot = await db.collection("users").doc(username).get();
@@ -84,11 +144,11 @@ app.get("/resetPassword", async (req, res) => {
         }
         const data = snapshot.data();
 
-        if(email != data.Email){
+        if (email != data.Email) {
             res.status(404).send("Emails do not match.");
             return;
         }
-        
+
         await firebase.sendPasswordResetEmail(firebase.getAuth(), data.Email);
 
         res.status(200).send("Success");
