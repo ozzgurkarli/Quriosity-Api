@@ -71,25 +71,27 @@ app.post("/login", async (req, res) => {
     }
 });
 
-// Kullanıcı adına göre verileri geri getiren GET endpoint
-app.get("/getUserByUsername/:username", async (req, res) => {
-    const { username } = req.params;
+app.get("/resetPassword", async (req, res) => {
+    const username = req.query.username;
+    const email = req.query.email;
 
     try {
-        const userRef = db.collection("users");
-        const snapshot = await userRef.where("username", "==", username).get();
+        const snapshot = await db.collection("users").doc(username).get();
 
-        if (snapshot.empty) {
-            res.status(404).send("Kullanıcı bulunamadı");
+        if (!snapshot.exists) {
+            res.status(404).send("Username not found.");
             return;
         }
+        const data = snapshot.data();
 
-        const users = [];
-        snapshot.forEach(doc => {
-            users.push(doc.data());
-        });
+        if(email != data.Email){
+            res.status(404).send("Emails do not match.");
+            return;
+        }
+        
+        await firebase.sendPasswordResetEmail(firebase.getAuth(), data.Email);
 
-        res.status(200).json(users);
+        res.status(200).send("Success");
     } catch (error) {
         console.error("Hata:", error);
         res.status(500).send("Bir hata oluştu");
