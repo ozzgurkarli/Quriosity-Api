@@ -94,6 +94,34 @@ app.post("/createCommunity", async (req, res) => {
 });
 
 
+app.put("/communityOpened", async (req, res) => {
+    const { id, uid } = req.body;
+    const now = new Date();
+
+    try {
+        const snapshot = await db.collection("communities").doc(id).get();
+
+        const list = snapshot.data().Participants;
+
+        list.forEach(map => {
+            if (map.uid === uid) {
+                map.flag = 0;
+            }
+        });
+
+        const docRef = db.collection("communities").doc(id);
+        docRef.update({
+            Participants: list
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+
 app.get("/communities/:uid", async (req, res) => {
     const { uid } = req.params;
     const results = [];
@@ -110,7 +138,15 @@ app.get("/communities/:uid", async (req, res) => {
 
         const results = [];
 
+        const now = new Date();
+
         querySnapshot1.forEach(doc => {
+            if ((now.getTime() - doc.data().LastActivity) > (36 * 60 * 60 * 1000) && doc.data().Streak > 0) {
+                const docRef = db.collection("communities").doc(doc.id);
+                docRef.update({
+                    Streak: 0
+                });
+            }
             results.push({
                 id: doc.id,
                 ...doc.data()
@@ -118,6 +154,12 @@ app.get("/communities/:uid", async (req, res) => {
         });
 
         querySnapshot2.forEach(doc => {
+            if ((now.getTime() - doc.data().LastActivity) > (36 * 60 * 60 * 1000) && doc.data().Streak > 0) {
+                const docRef = db.collection("communities").doc(doc.id);
+                docRef.update({
+                    Streak: 0
+                });
+            }
             results.push({
                 id: doc.id,
                 ...doc.data()
