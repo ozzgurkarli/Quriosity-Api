@@ -229,6 +229,27 @@ app.ws("/messages/:communityId", (ws, req) => {
     }
 });
 
+app.get("/messages/:communityId", async (req, res) => {
+    const { communityId } = req.params;
+    const results = [];
+
+    try {
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).orderBy("MessageDate", "desc").limit(20).get();
+
+        snapshot.forEach(doc => {
+            results.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
 
 
 app.get("/resetPassword/:username/:email", async (req, res) => {
