@@ -2,9 +2,11 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const admin = require('./admin');
 const firebase = require('./firebase');
+const expressWs = require("express-ws");
 
 
 const app = express();
+expressWs(app);
 app.use(bodyParser.json());
 
 
@@ -172,6 +174,61 @@ app.get("/communities/:uid", async (req, res) => {
         res.status(500).send("Bir hata oluştu");
     }
 });
+
+app.post("/sendMessage", async (req, res) => {
+    const { CommunityId, senderuid, QuestionId, Message } = req.body;
+    const now = new Date();
+
+    try {
+        await db.collection("messages").doc().set({
+            CommunityId: CommunityId,
+            senderuid: senderuid,
+            QuestionId: QuestionId,
+            MessageDate: now.getTime(),
+            Message: Message
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+
+app.ws("/messages/:communityId", (ws, req) => {
+    const { communityId } = req.params;
+    let lastVisible = null;
+
+    try {
+        const messageRef = db.collection("messages").where("CommunityId", "==", communityId).orderBy("MessageDate", "desc").limit(1);
+
+        const unsubscribe = messageRef.onSnapshot(snapshot => {
+            if (!snapshot.empty) {
+                snapshot.forEach(doc => {
+                    if (lastVisible && lastVisible.isEqual(doc)) {
+                        return;
+                    }
+                    ws.send(JSON.stringify({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+
+                    lastVisible = doc;
+                });
+            }
+        });
+
+        ws.on("close", () => {
+            unsubscribe();
+        });
+
+    } catch (error) {
+        console.error("Error listening to community:", error);
+        ws.send(JSON.stringify({ error: "An error occurred" }));
+    }
+});
+
 
 
 app.get("/resetPassword/:username/:email", async (req, res) => {
