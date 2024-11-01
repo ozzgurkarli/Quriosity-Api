@@ -229,6 +229,36 @@ app.ws("/messages/:communityId", (ws, req) => {
     }
 });
 
+
+app.get("/communityUsernames/:communityId", async (req, res) => {
+    const { communityId } = req.params;
+    const results = [];
+
+    try {
+        const snapshotComm = await db.collection("communities").doc(communityId).get();
+
+        const list = [];
+
+        snapshotComm.data().Participants.forEach(map => {
+            list.push(map.uid);
+        });
+
+        const snapshotUser = await db.collection("users").where("uid", "in", list).get();
+        snapshotUser.forEach(doc => {
+            results.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
 app.get("/messages/:communityId", async (req, res) => {
     const { communityId } = req.params;
     const results = [];
