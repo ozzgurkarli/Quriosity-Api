@@ -69,7 +69,7 @@ app.post("/addUser", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-    const { Username, Password, NotificationToken } = req.body;
+    const { Username, Password, uid, NotificationToken } = req.body;
 
     // sendPushNotification("key", "başlık", "body");
 
@@ -82,14 +82,16 @@ app.post("/login", async (req, res) => {
 
         const data = doc.data();
 
-        const userCredential = await firebase.signInWithEmailAndPassword(firebase.getAuth(), data.Email, Password);
-        const user = userCredential.user;
+        if (uid == undefined) {
+            const userCredential = await firebase.signInWithEmailAndPassword(firebase.getAuth(), data.Email, Password);
+            const user = userCredential.user;
 
-        if (user.uid == null) {
-            return res.status(404).send("Password does not match.");
-        }
-        else if (!user.emailVerified) {
-            return res.status(404).send("E-mail not verified.");
+            if (user.uid == null) {
+                return res.status(404).send("Password does not match.");
+            }
+            else if (!user.emailVerified) {
+                return res.status(404).send("E-mail not verified.");
+            }
         }
 
         if (NotificationToken != data.NotificationToken) {
