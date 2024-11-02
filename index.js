@@ -10,10 +10,33 @@ expressWs(app);
 app.use(bodyParser.json());
 
 
+var fcm = admin.messaging();
 const db = admin.firestore();
 
+const sendPushNotification = (deviceToken, title, body) => {
+    const message = {
+        token: deviceToken,
+        notification: {
+            title: title,
+            body: body,
+        },
+        data: {
+            xdxd: "hadi",
+            lsls: "amk"
+        },
+    };
+
+    fcm.send(message)
+        .then((response) => {
+            console.log('Successfully sent message:', response);
+        })
+        .catch((error) => {
+            console.log('Error sending message:', error);
+        });
+};
+
 app.post("/addUser", async (req, res) => {
-    const { NameSurname, Username, Email, Password } = req.body;
+    const { NameSurname, Username, Email, Password, NotificationToken } = req.body;
 
     try {
         const user = await firebase.createUserWithEmailAndPassword(firebase.getAuth(), Email, Password)
@@ -25,6 +48,7 @@ app.post("/addUser", async (req, res) => {
                             NameSurname: NameSurname,
                             Email: Email,
                             uid: user.uid,
+                            NotificationToken: NotificationToken
                         }).then(() => {
                             res.status(201).json({ message: "Verification email sent! User created successfully!" });
                         });
@@ -45,7 +69,9 @@ app.post("/addUser", async (req, res) => {
 });
 
 app.post("/login", async (req, res) => {
-    const { Username, Password } = req.body;
+    const { Username, Password, NotificationToken } = req.body;
+
+    // sendPushNotification("key", "başlık", "body");
 
     try {
         const doc = await db.collection("users").doc(Username).get();
@@ -66,7 +92,15 @@ app.post("/login", async (req, res) => {
             return res.status(404).send("E-mail not verified.");
         }
 
-        res.status(200).json({
+        if (NotificationToken != data.NotificationToken) {
+            const docRef = await db.collection("users").doc(Username);
+
+            await docRef.update({
+                NotificationToken: NotificationToken
+            });
+        }
+
+        return res.status(200).json({
             Username: doc.id,
             ...doc.data()
         });
@@ -227,7 +261,7 @@ app.post("/sendMessage", async (req, res) => {
 });
 
 app.post("/newQuestion", async (req, res) => {
-    const { CommunityId, senderuid, Question, Options } = req.body;
+    const { CommunityId, senderuid, Question, Options, InactiveUsers } = req.body;
     const now = new Date();
 
     try {
