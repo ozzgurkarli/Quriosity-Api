@@ -66,7 +66,10 @@ app.post("/login", async (req, res) => {
             return res.status(404).send("E-mail not verified.");
         }
 
-        res.status(200).json(doc.data());
+        res.status(200).json({
+            Username: doc.id,
+            ...doc.data()
+        });
     } catch (error) {
         if (error.code == "auth/invalid-credential") {
             return res.status(404).send("Password does not match.");
@@ -86,6 +89,34 @@ app.post("/createCommunity", async (req, res) => {
             Participants: Participants,
             Streak: 0,
             LastActivity: now.getTime()
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+app.get("/joinCommunity/:invitationCode/:uid", async (req, res) => {
+    const { invitationCode, uid } = req.params;
+
+    try {
+        const snapshot = await db.collection("invitationCodes").where("InvitationCode", "==", invitationCode).get();
+
+        if (snapshot.docs.length == 0) {
+            return res.status(404).send("Community not found.");
+        }
+
+        const commId = snapshot.docs[0].id;
+
+        const docRef = await db.collection("communities").doc(commId);
+        const ssDoc = await docRef.get();
+        const list = ssDoc.data().Participants;
+        list.push({ uid: uid, flag: 0 });
+
+        await docRef.update({
+            Participants: list
         });
 
         res.status(200).send("Success");
@@ -195,6 +226,141 @@ app.post("/sendMessage", async (req, res) => {
     }
 });
 
+app.post("/newQuestion", async (req, res) => {
+    const { CommunityId, senderuid, Question, Options } = req.body;
+    const now = new Date();
+
+    try {
+        await db.collection("questions").doc().set({
+            CommunityId: CommunityId,
+            senderuid: senderuid,
+            Question: Question,
+            QuestionDate: now.getTime(),
+            Options: Options
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+app.get("/userActivities/:CommunityId", async (req, res) => {
+    const { CommunityId } = req.params;
+    const list = [];
+
+    try {
+        const snapshotAct = await db.collection("userActivities").where("CommunityId", "==", CommunityId).get();
+        snapshotAct.forEach((doc) => {
+            list.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return res.status(200).json(list);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+app.post("/userActivities", async (req, res) => {
+    const { CommunityId, uid, State } = req.body;
+    const list = [];
+
+    try {
+        if (State == 1) {
+            await db.collection("userActivities").doc().set({
+                uid: uid,
+                CommunityId: CommunityId
+            });
+
+        } else {
+            const snapshotAct = await db.collection("userActivities").where("uid", "==", uid).get();
+            snapshotAct.forEach((doc) => {
+                const docRef = db.collection("userActivities").doc(doc.id).delete();
+            });
+        }
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+
+app.ws("/userActivities/:communityId", (ws, req) => {
+    const { communityId } = req.params;
+    let lastVisible = null;
+
+    try {
+        const messageRef = db.collection("userActivities").where("CommunityId", "==", communityId);
+
+        const unsubscribe = messageRef.onSnapshot(snapshot => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === "removed") {
+                    ws.send(JSON.stringify({
+                        uid: change.doc.data().uid,
+                    }));
+                } else if (change.type === "added" || change.type === "modified") {
+                    if (lastVisible && lastVisible.isEqual(change.doc)) {
+                        return;
+                    }
+                    ws.send(JSON.stringify({
+                        id: change.doc.id,
+                        ...change.doc.data()
+                    }));
+                    lastVisible = change.doc;
+                }
+            });
+        });
+
+        ws.on("close", () => {
+            unsubscribe();
+        });
+
+    } catch (error) {
+        console.error("Error listening to community:", error);
+        ws.send(JSON.stringify({ error: "An error occurred" }));
+    }
+});
+
+app.ws("/questions/:communityId", (ws, req) => {
+    const { communityId } = req.params;
+    let lastVisible = null;
+
+    try {
+        const questionRef = db.collection("questions").where("CommunityId", "==", communityId).orderBy("QuestionDate", "desc").limit(1);
+
+        const unsubscribe = questionRef.onSnapshot(snapshot => {
+            if (!snapshot.empty) {
+                snapshot.forEach(doc => {
+                    if (lastVisible && lastVisible.isEqual(doc)) {
+                        return;
+                    }
+                    ws.send(JSON.stringify({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+
+                    lastVisible = doc;
+                });
+            }
+        });
+
+        ws.on("close", () => {
+            unsubscribe();
+        });
+
+    } catch (error) {
+        console.error("Error listening to community:", error);
+        ws.send(JSON.stringify({ error: "An error occurred" }));
+    }
+});
+
 
 app.ws("/messages/:communityId", (ws, req) => {
     const { communityId } = req.params;
@@ -259,6 +425,28 @@ app.get("/communityUsernames/:communityId", async (req, res) => {
     }
 });
 
+
+app.get("/questions/:communityId", async (req, res) => {
+    const { communityId } = req.params;
+    const results = [];
+
+    try {
+        const snapshot = await db.collection("questions").where("CommunityId", "==", communityId).orderBy("QuestionDate", "desc").limit(5).get();
+
+        snapshot.forEach(doc => {
+            results.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        return res.status(200).json(results);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
 app.get("/messages/:communityId", async (req, res) => {
     const { communityId } = req.params;
     const results = [];
@@ -274,6 +462,29 @@ app.get("/messages/:communityId", async (req, res) => {
         });
 
         return res.status(200).json(results);
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
+app.get("/invitationCode/:communityId", async (req, res) => {
+    const { communityId } = req.params;
+    const now = new Date();
+
+    try {
+        const snapshot = await db.collection("invitationCodes").doc(communityId).get();
+
+        if (!snapshot.exists) {
+            const invitationCode = generateInvitationCode();
+            await db.collection("invitationCodes").doc(communityId).set({
+                InvitationCode: invitationCode,
+                GenerateDate: now.getTime()
+            });
+            return res.status(200).json({ InvitationCode: invitationCode });
+        }
+
+        return res.status(200).json(snapshot.data());
     } catch (error) {
         console.error("Hata:", error);
         res.status(500).send("Bir hata oluştu");
@@ -307,6 +518,16 @@ app.get("/resetPassword/:username/:email", async (req, res) => {
         res.status(500).send("Bir hata oluştu");
     }
 });
+
+function generateInvitationCode() {
+    const length = 12;
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+}
 
 
 const PORT = process.env.PORT || 3000;
