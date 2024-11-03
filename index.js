@@ -490,7 +490,7 @@ app.get("/messages/:communityId/:lastOpenedDate", async (req, res) => {
     const results = [];
 
     try {
-        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">=", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").get();
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">=", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(50).get();
 
         snapshot.forEach(doc => {
             results.push({
