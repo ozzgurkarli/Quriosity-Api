@@ -401,6 +401,7 @@ app.ws("/questions/:communityId", (ws, req) => {
 app.ws("/messages/:communityId", (ws, req) => {
     const { communityId } = req.params;
     let lastVisible = null;
+    const now = new Date();
 
     try {
         const messageRef = db.collection("messages").where("CommunityId", "==", communityId).orderBy("MessageDate", "desc").limit(1);
@@ -413,6 +414,7 @@ app.ws("/messages/:communityId", (ws, req) => {
                     }
                     ws.send(JSON.stringify({
                         id: doc.id,
+                        LastOpenedDate: now.getTime(),
                         ...doc.data()
                     }));
 
@@ -483,12 +485,12 @@ app.get("/questions/:communityId", async (req, res) => {
     }
 });
 
-app.get("/messages/:communityId", async (req, res) => {
-    const { communityId } = req.params;
+app.get("/messages/:communityId/:lastOpenedDate", async (req, res) => {
+    const { communityId, lastOpenedDate } = req.params;
     const results = [];
 
     try {
-        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).orderBy("MessageDate", "desc").limit(20).get();
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", "<=", lastOpenedDate).orderBy("MessageDate", "desc").get();
 
         snapshot.forEach(doc => {
             results.push({
