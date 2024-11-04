@@ -428,8 +428,7 @@ app.ws("/messages/:communityId", (ws, req) => {
         });
 
     } catch (error) {
-        console.error("Error listening to community:", error);
-        ws.send(JSON.stringify({ error: "An error occurred" }));
+        console.error(error);
     }
 });
 
@@ -490,7 +489,7 @@ app.get("/messages/:communityId/:lastOpenedDate", async (req, res) => {
     const results = [];
 
     try {
-        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">=", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(50).get();
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(50).get();
 
         snapshot.forEach(doc => {
             results.push({
