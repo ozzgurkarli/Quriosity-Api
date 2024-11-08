@@ -3,7 +3,7 @@ const bodyParser = require("body-parser");
 const admin = require('./admin');
 const firebase = require('./firebase');
 const expressWs = require("express-ws");
-
+const jwt = require('jsonwebtoken');
 
 const app = express();
 expressWs(app);
@@ -34,6 +34,31 @@ const sendPushNotification = (deviceToken, title, body) => {
             console.log('Error sending message:', error);
         });
 };
+
+function generateToken(user) {
+    const payload = {
+      id: user.uid,
+      username: user.username, 
+      role: user.role    
+    };
+  
+    const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, { expiresIn: '1h' }); 
+  
+    return token;
+  }
+
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.status(401).send("Token not found.");
+  
+    jwt.verify(token, process.env.JWT_SECRET_KEY, (err, user) => {
+      if (err) return res.status(401).send("Token not valid.");
+
+      next();
+    });
+  }
+  
 
 app.post("/addUser", async (req, res) => {
     const { NameSurname, Username, Email, Password, NotificationToken } = req.body;
@@ -102,8 +127,10 @@ app.post("/login", async (req, res) => {
             });
         }
 
+        const token = generateToken({ id: uid, username: Username, role: 'user' });
         return res.status(200).json({
             Username: doc.id,
+            UserToken: token,
             ...doc.data()
         });
     } catch (error) {
@@ -115,7 +142,7 @@ app.post("/login", async (req, res) => {
     }
 });
 
-app.post("/createCommunity", async (req, res) => {
+app.post("/createCommunity", authenticateToken, async (req, res) => {
     const { CommunityName, Participants } = req.body;
     const now = new Date();
 
@@ -134,7 +161,7 @@ app.post("/createCommunity", async (req, res) => {
     }
 });
 
-app.get("/joinCommunity/:invitationCode/:uid", async (req, res) => {
+app.get("/joinCommunity/:invitationCode/:uid", authenticateToken, async (req, res) => {
     const { invitationCode, uid } = req.params;
 
     try {
@@ -163,7 +190,7 @@ app.get("/joinCommunity/:invitationCode/:uid", async (req, res) => {
 });
 
 
-app.put("/communityOpened", async (req, res) => {
+app.put("/communityOpened", authenticateToken, async (req, res) => {
     const { id, uid } = req.body;
     const now = new Date();
 
@@ -191,7 +218,7 @@ app.put("/communityOpened", async (req, res) => {
 });
 
 
-app.get("/communities/:uid", async (req, res) => {
+app.get("/communities/:uid", authenticateToken, async (req, res) => {
     const { uid } = req.params;
     const results = [];
 
@@ -242,7 +269,7 @@ app.get("/communities/:uid", async (req, res) => {
     }
 });
 
-app.post("/sendMessage", async (req, res) => {
+app.post("/sendMessage", authenticateToken, async (req, res) => {
     const { CommunityId, senderuid, QuestionId, Message } = req.body;
     const now = new Date();
 
@@ -262,7 +289,7 @@ app.post("/sendMessage", async (req, res) => {
     }
 });
 
-app.post("/newQuestion", async (req, res) => {
+app.post("/newQuestion", authenticateToken, async (req, res) => {
     const { CommunityId, senderuid, Question, Options, InactiveUsers } = req.body;
     const now = new Date();
 
@@ -282,7 +309,7 @@ app.post("/newQuestion", async (req, res) => {
     }
 });
 
-app.get("/userActivities/:CommunityId", async (req, res) => {
+app.get("/userActivities/:CommunityId", authenticateToken, async (req, res) => {
     const { CommunityId } = req.params;
     const list = [];
 
@@ -302,7 +329,7 @@ app.get("/userActivities/:CommunityId", async (req, res) => {
     }
 });
 
-app.post("/userActivities", async (req, res) => {
+app.post("/userActivities", authenticateToken, async (req, res) => {
     const { CommunityId, uid, State } = req.body;
     const list = [];
 
@@ -433,7 +460,7 @@ app.ws("/messages/:communityId", (ws, req) => {
 });
 
 
-app.get("/communityUsernames/:communityId", async (req, res) => {
+app.get("/communityUsernames/:communityId", authenticateToken, async (req, res) => {
     const { communityId } = req.params;
     const results = [];
 
@@ -463,7 +490,7 @@ app.get("/communityUsernames/:communityId", async (req, res) => {
 });
 
 
-app.get("/questions/:communityId", async (req, res) => {
+app.get("/questions/:communityId", authenticateToken, async (req, res) => {
     const { communityId } = req.params;
     const results = [];
 
@@ -484,7 +511,7 @@ app.get("/questions/:communityId", async (req, res) => {
     }
 });
 
-app.get("/messages/:communityId/:lastOpenedDate", async (req, res) => {
+app.get("/messages/:communityId/:lastOpenedDate", authenticateToken, async (req, res) => {
     const { communityId, lastOpenedDate } = req.params;
     const results = [];
 
@@ -505,7 +532,7 @@ app.get("/messages/:communityId/:lastOpenedDate", async (req, res) => {
     }
 });
 
-app.get("/invitationCode/:communityId", async (req, res) => {
+app.get("/invitationCode/:communityId", authenticateToken, async (req, res) => {
     const { communityId } = req.params;
     const now = new Date();
 
