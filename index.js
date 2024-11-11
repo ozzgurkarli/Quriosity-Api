@@ -294,12 +294,29 @@ app.post("/newQuestion", authenticateToken, async (req, res) => {
     const now = new Date();
 
     try {
+        
         await db.collection("questions").doc().set({
             CommunityId: CommunityId,
             senderuid: senderuid,
             Question: Question,
             QuestionDate: now.getTime(),
             Options: Options
+        });
+
+        const snapshot = await db.collection("communities").doc(CommunityId).get();
+        const list = snapshot.data().Participants;
+        list.forEach(map => {
+            const inactiveUser = InactiveUsers.find(inactive => inactive.uid === map.uid);
+            if (inactiveUser) {
+                map.flag = 1;
+                if(inactiveUser.NotificationToken !== undefined){
+                    sendPushNotification(inactiveUser.NotificationToken, "Quriosity", "Bir yeni sorunuz var!");
+                }
+            }
+        });
+        const docRef = db.collection("communities").doc(CommunityId);
+        docRef.update({
+            Participants: list
         });
 
         res.status(200).send("Success");
