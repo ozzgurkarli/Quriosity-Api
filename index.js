@@ -37,28 +37,28 @@ const sendPushNotification = (deviceToken, title, body) => {
 
 function generateToken(user) {
     const payload = {
-      id: user.uid,
-      username: user.username, 
-      role: user.role    
+        id: user.uid,
+        username: user.username,
+        role: user.role
     };
-  
-    const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, { expiresIn: '1h' }); 
-  
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
+
     return token;
-  }
+}
 
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) return res.status(401).send("Token not found.");
-  
-    jwt.verify(token, process.env.JWT_SECRET_KEY, (err, user) => {
-      if (err) return res.status(401).send("Token not valid.");
 
-      next();
+    jwt.verify(token, process.env.JWT_SECRET_KEY, (err, user) => {
+        if (err) return res.status(401).send("Token not valid.");
+
+        next();
     });
-  }
-  
+}
+
 
 app.post("/addUser", async (req, res) => {
     const { NameSurname, Username, Email, Password, NotificationToken } = req.body;
@@ -151,6 +151,7 @@ app.post("/createCommunity", authenticateToken, async (req, res) => {
             CommunityName: CommunityName,
             Participants: Participants,
             Streak: 0,
+            LastStreakUpdateDay: 0,
             LastActivity: now.getTime()
         });
 
@@ -240,7 +241,8 @@ app.get("/communities/:uid", authenticateToken, async (req, res) => {
             if ((now.getTime() - doc.data().LastActivity) > (36 * 60 * 60 * 1000) && doc.data().Streak > 0) {
                 const docRef = db.collection("communities").doc(doc.id);
                 docRef.update({
-                    Streak: 0
+                    Streak: 0,
+                    LastStreakUpdateDay: 0
                 });
             }
             results.push({
@@ -253,7 +255,8 @@ app.get("/communities/:uid", authenticateToken, async (req, res) => {
             if ((now.getTime() - doc.data().LastActivity) > (36 * 60 * 60 * 1000) && doc.data().Streak > 0) {
                 const docRef = db.collection("communities").doc(doc.id);
                 docRef.update({
-                    Streak: 0
+                    Streak: 0,
+                    LastStreakUpdateDay: 0
                 });
             }
             results.push({
@@ -289,12 +292,53 @@ app.post("/sendMessage", authenticateToken, async (req, res) => {
     }
 });
 
+app.put("/updateAnswers", authenticateToken, async (req, res) => {
+    const { Username, uid, QuestionId, id } = req.body;
+    const now = new Date();
+    let userFound = false;
+
+    try {
+
+        const snapshot = await db.collection("questions").doc(QuestionId).get();
+        let list = snapshot.data().Answers;
+        if (list) {
+            list.forEach(map => {
+                if (map.uid == uid) {
+                    userFound = true;
+                    map.id = id;
+                }
+            });
+        }
+        else{
+            list = [];
+        }
+        
+        if(!userFound){
+            list.push({
+                id: id,
+                Username: Username,
+                uid: uid
+            });
+        }
+
+        const docRef = db.collection("questions").doc(QuestionId);
+        docRef.update({
+            Answers: list
+        });
+
+        res.status(200).send("Success");
+    } catch (error) {
+        console.error("Hata:", error);
+        res.status(500).send("Bir hata oluştu");
+    }
+});
+
 app.post("/newQuestion", authenticateToken, async (req, res) => {
     const { CommunityId, senderuid, Question, Options, InactiveUsers } = req.body;
     const now = new Date();
 
     try {
-        
+
         await db.collection("questions").doc().set({
             CommunityId: CommunityId,
             senderuid: senderuid,
@@ -304,19 +348,30 @@ app.post("/newQuestion", authenticateToken, async (req, res) => {
         });
 
         const snapshot = await db.collection("communities").doc(CommunityId).get();
+        let streak = snapshot.data().Streak;
+        let lastStreakUpdateDay = snapshot.data().LastStreakUpdateDay;
         const list = snapshot.data().Participants;
         list.forEach(map => {
             const inactiveUser = InactiveUsers.find(inactive => inactive.uid === map.uid);
             if (inactiveUser) {
                 map.flag = 1;
-                if(inactiveUser.NotificationToken !== undefined){
+                if (inactiveUser.NotificationToken !== undefined) {
                     sendPushNotification(inactiveUser.NotificationToken, "Quriosity", "Bir yeni sorunuz var!");
                 }
             }
         });
+        if (streak == 0) {
+            streak = 1;
+        } else if (lastStreakUpdateDay != now.getDate()) {
+            streak += 1;
+        }
+
         const docRef = db.collection("communities").doc(CommunityId);
         docRef.update({
-            Participants: list
+            Participants: list,
+            Streak: streak,
+            LastActivity: now.getTime(),
+            LastStreakUpdateDay: now.getDate()
         });
 
         res.status(200).send("Success");
@@ -533,7 +588,7 @@ app.get("/messages/:communityId/:lastOpenedDate", authenticateToken, async (req,
     const results = [];
 
     try {
-        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(50).get();
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(parseInt(lastOpenedDate)).get();
 
         snapshot.forEach(doc => {
             results.push({
