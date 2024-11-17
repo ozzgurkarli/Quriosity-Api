@@ -323,7 +323,8 @@ app.put("/updateAnswers", authenticateToken, async (req, res) => {
 
         const docRef = db.collection("questions").doc(QuestionId);
         docRef.update({
-            Answers: list
+            Answers: list,
+            LastUpdateDate: now.getTime()
         });
 
         res.status(200).send("Success");
@@ -338,12 +339,13 @@ app.post("/newQuestion", authenticateToken, async (req, res) => {
     const now = new Date();
 
     try {
-
+        const time = now.getTime();
         await db.collection("questions").doc().set({
             CommunityId: CommunityId,
             senderuid: senderuid,
             Question: Question,
-            QuestionDate: now.getTime(),
+            QuestionDate: time,
+            LastUpdateDate: time,
             Options: Options
         });
 
@@ -355,7 +357,7 @@ app.post("/newQuestion", authenticateToken, async (req, res) => {
             const inactiveUser = InactiveUsers.find(inactive => inactive.uid === map.uid);
             if (inactiveUser) {
                 map.flag = 1;
-                if (inactiveUser.NotificationToken !== undefined) {
+                if (inactiveUser.NotificationToken !== undefined && inactiveUser.NotificationToken !== null) {
                     sendPushNotification(inactiveUser.NotificationToken, "Quriosity", "Bir yeni sorunuz var!");
                 }
             }
@@ -468,7 +470,7 @@ app.ws("/questions/:communityId", (ws, req) => {
     let lastVisible = null;
 
     try {
-        const questionRef = db.collection("questions").where("CommunityId", "==", communityId).orderBy("QuestionDate", "desc").limit(1);
+        const questionRef = db.collection("questions").where("CommunityId", "==", communityId).orderBy("LastUpdateDate", "desc").limit(1);
 
         const unsubscribe = questionRef.onSnapshot(snapshot => {
             if (!snapshot.empty) {
@@ -476,8 +478,10 @@ app.ws("/questions/:communityId", (ws, req) => {
                     if (lastVisible && lastVisible.isEqual(doc)) {
                         return;
                     }
+                    const now = new Date();
                     ws.send(JSON.stringify({
                         id: doc.id,
+                        LastOpenedDate: now.getTime(),
                         ...doc.data()
                     }));
 
@@ -562,12 +566,12 @@ app.get("/communityUsernames/:communityId", authenticateToken, async (req, res) 
 });
 
 
-app.get("/questions/:communityId", authenticateToken, async (req, res) => {
-    const { communityId } = req.params;
+app.get("/questions/:communityId/:lastOpenedDate", authenticateToken, async (req, res) => {
+    const { communityId, lastOpenedDate } = req.params;
     const results = [];
 
     try {
-        const snapshot = await db.collection("questions").where("CommunityId", "==", communityId).orderBy("QuestionDate", "desc").limit(5).get();
+        const snapshot = await db.collection("questions").where("CommunityId", "==", communityId).where("LastUpdateDate", ">", parseInt(lastOpenedDate)).orderBy("LastUpdateDate", "desc").limit(parseInt(lastOpenedDate)).get();
 
         snapshot.forEach(doc => {
             results.push({
