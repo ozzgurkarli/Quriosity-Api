@@ -35,6 +35,10 @@ const sendPushNotification = (deviceToken, title, body) => {
         });
 };
 
+function generateNumber(length){
+    return Math.floor(Math.random() * length);
+}
+
 function generateToken(user) {
     const payload = {
         id: user.uid,
@@ -73,6 +77,7 @@ app.post("/addUser", async (req, res) => {
                             NameSurname: NameSurname,
                             Email: Email,
                             uid: user.uid,
+                            ProfileIcon: generateNumber(4),
                             NotificationToken: NotificationToken
                         }).then(() => {
                             res.status(201).json({ message: "Verification email sent! User created successfully!" });
@@ -293,7 +298,7 @@ app.post("/sendMessage", authenticateToken, async (req, res) => {
 });
 
 app.put("/updateAnswers", authenticateToken, async (req, res) => {
-    const { Username, uid, QuestionId, id } = req.body;
+    const { Username, uid, QuestionId, id, remove } = req.body;
     const now = new Date();
     let userFound = false;
 
@@ -302,18 +307,25 @@ app.put("/updateAnswers", authenticateToken, async (req, res) => {
         const snapshot = await db.collection("questions").doc(QuestionId).get();
         let list = snapshot.data().Answers;
         if (list) {
-            list.forEach(map => {
-                if (map.uid == uid) {
-                    userFound = true;
-                    map.id = id;
-                }
-            });
+            if (remove) {
+                list = list.filter(x => x.uid !== uid);
+                userFound = true;
+            }
+            else {
+                list.forEach(map => {
+                    if (map.uid == uid) {
+                        userFound = true;
+                        map.id = id;
+                    }
+                });
+            }
+
         }
-        else{
+        else {
             list = [];
         }
-        
-        if(!userFound){
+
+        if (!userFound) {
             list.push({
                 id: id,
                 Username: Username,
