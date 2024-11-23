@@ -35,7 +35,7 @@ const sendPushNotification = (deviceToken, title, body) => {
         });
 };
 
-function generateNumber(length){
+function generateNumber(length) {
     return Math.floor(Math.random() * length);
 }
 
@@ -64,7 +64,7 @@ function authenticateToken(req, res, next) {
 }
 
 
-app.post("/addUser", async (req, res) => {
+app.post("/addUser", authenticateToken, async (req, res) => {
     const { NameSurname, Username, Email, Password, NotificationToken } = req.body;
 
     try {
@@ -93,6 +93,21 @@ app.post("/addUser", async (req, res) => {
                 res.status(404).send("E-mail already in use.");
             });
     } catch (error) {
+        console.error("Kullanıcı oluşturulurken hata:", error);
+        res.status(500).send("Bir hata oluştu: " + error.message);
+    }
+});
+
+app.put("/updateProfileIcon", async (req, res) => {
+    const { Username, ProfileIcon } = req.body;
+
+    try {
+        const docRef = await db.collection("users").doc(Username);
+        await docRef.update({
+            ProfileIcon: ProfileIcon
+        });
+    }
+    catch (error) {
         console.error("Kullanıcı oluşturulurken hata:", error);
         res.status(500).send("Bir hata oluştu: " + error.message);
     }
