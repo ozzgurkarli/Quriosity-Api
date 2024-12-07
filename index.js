@@ -116,8 +116,6 @@ app.put("/updateProfileIcon", async (req, res) => {
 app.post("/login", async (req, res) => {
     const { Username, Password, uid, NotificationToken } = req.body;
 
-    // sendPushNotification("key", "başlık", "body");
-
     try {
         const doc = await db.collection("users").doc(Username).get();
 
@@ -598,7 +596,7 @@ app.get("/questions/:communityId/:lastOpenedDate", authenticateToken, async (req
     const results = [];
 
     try {
-        const snapshot = await db.collection("questions").where("CommunityId", "==", communityId).where("LastUpdateDate", ">", parseInt(lastOpenedDate)).orderBy("LastUpdateDate", "desc").limit(parseInt(lastOpenedDate)).get();
+        const snapshot = await db.collection("questions").where("CommunityId", "==", communityId).where("LastUpdateDate", ">", parseInt(lastOpenedDate)).orderBy("LastUpdateDate", "desc").limit(parseInt(lastOpenedDate) == 0 ? 0 : 10000).get();
 
         snapshot.forEach(doc => {
             results.push({
@@ -619,7 +617,7 @@ app.get("/messages/:communityId/:lastOpenedDate", authenticateToken, async (req,
     const results = [];
 
     try {
-        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(parseInt(lastOpenedDate)).get();
+        const snapshot = await db.collection("messages").where("CommunityId", "==", communityId).where("MessageDate", ">", parseInt(lastOpenedDate)).orderBy("MessageDate", "desc").limit(parseInt(lastOpenedDate) == 0 ? 0 : 10000).get();
 
         snapshot.forEach(doc => {
             results.push({
