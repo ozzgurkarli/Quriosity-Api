@@ -13,7 +13,7 @@ app.use(bodyParser.json());
 var fcm = admin.messaging();
 const db = admin.firestore();
 
-const sendPushNotification = (deviceToken, title, body) => {
+const sendPushNotification = (deviceToken, title, body, screen, id) => {
     const message = {
         token: deviceToken,
         notification: {
@@ -21,8 +21,8 @@ const sendPushNotification = (deviceToken, title, body) => {
             body: body,
         },
         data: {
-            xdxd: "hadi",
-            lsls: "amk"
+            screen: screen,
+            id: id
         },
     };
 
@@ -383,7 +383,7 @@ app.post("/newQuestion", authenticateToken, async (req, res) => {
             if (inactiveUser) {
                 map.flag = 1;
                 if (inactiveUser.NotificationToken !== undefined && inactiveUser.NotificationToken !== null) {
-                    sendPushNotification(inactiveUser.NotificationToken, "Quriosity", "Bir yeni sorunuz var!");
+                    sendPushNotification(inactiveUser.NotificationToken, "Quriosity", snapshot.data().CommunityName + " topluluğunda bir yeni soru var!", "CMNTYHME", CommunityId);
                 }
             }
         });
