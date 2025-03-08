@@ -3,6 +3,7 @@ const router = express.Router();
 const {authenticateToken} = require("../services/auth");
 const admin = require('../config/admin');
 const db = admin.firestore();
+const notification = require('../services/notifications');
 
 router.get("/questions/:communityId/:lastOpenedDate", authenticateToken, async (req, res) => {
     const { communityId, lastOpenedDate } = req.params;
@@ -98,7 +99,7 @@ router.post("/newQuestion", authenticateToken, async (req, res) => {
             if (inactiveUser) {
                 map.flag = 1;
                 if (inactiveUser.NotificationToken !== undefined && inactiveUser.NotificationToken !== null) {
-                    sendPushNotification(inactiveUser.NotificationToken, "Quriosity", snapshot.data().CommunityName + " topluluğunda bir yeni soru var!", "CMNTYHME", CommunityId);
+                    notification.sendPushNotification(inactiveUser.NotificationToken, "Quriosity", snapshot.data().CommunityName + " topluluğunda bir yeni soru var!", "CMNTYHME", CommunityId);
                 }
             }
         });

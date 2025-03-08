@@ -1,4 +1,4 @@
-const admin = require('./config/admin');
+const admin = require('../config/admin');
 var fcm = admin.messaging();
 
 const sendPushNotification = (deviceToken, title, body, screen, id) => {

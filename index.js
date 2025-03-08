@@ -8,16 +8,16 @@ app.use(bodyParser.json());
 
 const userRoutes = require('./routes/users');
 const communityRoutes = require('./routes/communities');
-const messageRoutes = require('./routes/messages');
 const websocketRoutes = require('./routes/websocket');
+const messageRoutes = require('./routes/messages');
 const questionRoutes = require('./routes/questions');
 const userActivitiesRoutes = require('./routes/userActivities');
 
 
 app.use(userRoutes);
 app.use(communityRoutes);
-app.use(messageRoutes);
 app.use(websocketRoutes);
+app.use(messageRoutes);
 app.use(questionRoutes);
 app.use(userActivitiesRoutes);
 
